@@ -1,0 +1,6 @@
+{
+  "name": "s3-sqs-lambda",
+  "version": "1.0.0",
+  "author": "mpgxc",
+  "license": "MIT"
+}

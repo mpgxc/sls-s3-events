@@ -1,0 +1,77 @@
+service: bucket-listener
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: us-east-1
+  stage: hml
+
+functions:
+  upload-processing-consumer:
+    handler: index.handler
+    timeout: 30
+    memorySize: 128
+    events:
+      - sqs:
+          arn:
+            'Fn::GetAtt':
+              - S3Queue
+              - Arn
+          batchSize: 10
+          
+resources:
+  Resources:
+    S3Queue:
+      Type: 'AWS::SQS::Queue'
+      Properties:
+        QueueName: '${self:service}-queue'
+        ReceiveMessageWaitTimeSeconds: 20
+        VisibilityTimeout: 30
+    S3Bucket:
+      Type: 'AWS::S3::Bucket'
+      Properties:
+        BucketName: '${self:service}-bucket'
+        NotificationConfiguration:
+          QueueConfigurations:
+            - Event: 's3:ObjectCreated:*'
+              Queue:
+                'Fn::GetAtt':
+                  - S3Queue
+                  - Arn
+              Filter:
+                S3Key:
+                  Rules:
+                    - Name: prefix
+                      Value: upload/
+    SQSQueuePolicy:
+      Type: 'AWS::SQS::QueuePolicy'
+      Properties:
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                AWS: '*'
+              Action:
+                - 'SQS:DeleteMessage'
+                - 'SQS:GetQueueAttributes'
+                - 'SQS:GetQueueUrl'
+                - 'SQS:ReceiveMessage'
+                - 'SQS:SendMessage'
+              Resource:
+                'Fn::GetAtt':
+                  - S3Queue
+                  - Arn
+            - Effect: Allow
+              Principal:
+                AWS: '*'
+              Action: 'SQS:SendMessage'
+              Resource:
+                'Fn::GetAtt':
+                  - S3Queue
+                  - Arn
+              Condition:
+                ArnLike:
+                  'aws:SourceArn': 'arn:aws:s3:::${self:service}-bucket'
+        Queues:
+          - Ref: S3Queue
